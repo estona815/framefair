@@ -1,4 +1,5 @@
 import {cleanBox,planCrop} from './geometry.mjs';
+import {withTimeout} from './timeout.mjs';
 const $=id=>document.getElementById(id);
 let image=null,boxes=[],ratio=1,margin=.2,draw=false,start=null,busy=false,detector=null,generation=0;
 const status=message=>{$('status').textContent=message;};
@@ -63,7 +64,7 @@ async function getDetector(){
 }
 $('detect').onclick=async()=>{
   if(!image||busy)return;const token=generation,photo=image;busy=true;invalidate();render();status('Loading the face detector… First use downloads public model files. Your photo stays local.');
-  try{const model=await getDetector();if(token!==generation)return;status('Running real face detection on the CPU…');const t=performance.now();const faces=await model.estimateFaces(photo,{flipHorizontal:false});if(token!==generation)return;
+  try{const model=await withTimeout(getDetector(),45000,'Model loading exceeded 45 seconds. Retry when the connection is ready.');if(token!==generation)return;status('Running real face detection on the CPU…');const t=performance.now();const faces=await model.estimateFaces(photo,{flipHorizontal:false});if(token!==generation)return;
     const manual=boxes.filter(b=>b.origin==='Manual');boxes=[...manual,...faces.map(f=>cleanBox({x:f.box.xMin,y:f.box.yMin,width:f.box.width,height:f.box.height},photo.naturalWidth,photo.naturalHeight)).filter(Boolean).map(b=>({...b,origin:'AI detected'}))];
     status(`${faces.length} model detection${faces.length===1?'':'s'} · ${(performance.now()-t).toFixed(0)} ms · CPU. Review the boxes; small, occluded or side-facing faces may be missed. Manual regions were kept.`);
   }catch(e){if(token===generation)status(`AI unavailable: ${e.message} You can still draw or enter regions manually. No detections were invented.`);}
